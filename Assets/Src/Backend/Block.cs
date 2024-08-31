@@ -2,26 +2,35 @@
 
 namespace Src.Backend 
 {
-    public enum BlockType
+    public enum BlockType : uint
     {
         Air,
+        Bedrock,
         Stone,
-        Grass,
         Dirt,
-        Bedrock
+        Grass,
     }
     
     public class Block
     {
-        public readonly int X, Y, Z;
+        public readonly uint X, Y, Z;
         public readonly BlockType Type;
         
-        public Block(int x, int y, int z, BlockType type)
+        public Block(uint x, uint y, uint z, BlockType type)
         {
             X = x;
             Y = y;
             Z = z;
             Type = type;
+        }
+        
+        public static bool IsSolid(BlockType type)
+        {
+            return type switch
+            {
+                BlockType.Air => false,
+                _ => true
+            };
         }
 
         public byte[] Serialize()
@@ -32,7 +41,7 @@ namespace Src.Backend
                     BitConverter.GetBytes(Y)),
                 Utility.Concatenate(
                     BitConverter.GetBytes(Z),
-                    BitConverter.GetBytes((int)Type))
+                    BitConverter.GetBytes((uint)Type))
             );
         }
     }

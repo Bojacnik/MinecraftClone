@@ -3,9 +3,9 @@ using UnityEngine;
 
 namespace Src.Backend
 {
-    public static class ChunkGenerator
+    public class ChunkGenerator : IChunkGenerator
     {
-        public static Chunk GenerateChunk(int x, int z)
+        public Chunk GenerateChunk(int x, int z)
         {
             /*
             for (var i = 1; i < perlin.Length; i++)
@@ -18,12 +18,12 @@ namespace Src.Backend
             var result = Mathf.PerlinNoise(5, 3);
             var chunk = new Chunk(x, z);
             chunk.SetAllAir();
-            for (var _z = 0; _z < Chunk.CHUNK_SIZE; _z++)
+            for (uint _z = 0; _z < Chunk.CHUNK_SIZE; _z++)
             {
-                for (var _x = 0; _x < Chunk.CHUNK_SIZE; _x++)
+                for (uint _x = 0; _x < Chunk.CHUNK_SIZE; _x++)
                 {
                     chunk.SetBlock(_x, 0, _z, BlockType.Bedrock);
-                    var (worldX, worldZ) = Chunk.ConvertLocalToWorld(_x, _z, x, z);
+                    var (worldX, worldZ) = Chunk.ConvertLocalToWorld(_x, _z, (uint)x, (uint)z);
 
                     var height = Convert.ToInt32(Mathf.PerlinNoise((worldX + 0.5f) * 0.5f, (worldZ + 0.5f) * 0.5f)) +
                                  Convert.ToInt32(2 * Mathf.PerlinNoise((worldX + 0.5f) * 0.5f, (worldZ + 0.5f) * 0.05f)) +
@@ -53,7 +53,7 @@ namespace Src.Backend
                             type = BlockType.Stone;
                         }
                         
-                        chunk.SetBlock(_x, _y, _z, type);
+                        chunk.SetBlock(_x, (uint)_y, _z, type);
                     }
                 }
             }

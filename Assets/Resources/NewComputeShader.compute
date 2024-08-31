@@ -1,0 +1,40 @@
+#pragma kernel CSMain
+
+
+RWStructuredBuffer<uint> block_buffer;
+RWBuffer<float3> vertices_buffer;
+RWBuffer<int> triangles_buffer;
+
+[numthreads(255,16,16)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    const half CHUNK_WIDTH = 16;
+    const half CHUNK_HEIGHT = 256;
+    const half PADDING = 1;
+    
+
+    half ourBlock = block_buffer[id.x * CHUNK_HEIGHT + id.y * CHUNK_HEIGHT + id.z * CHUNK_HEIGHT * CHUNK_WIDTH];
+    half otherBlocks[6];
+
+    // top block
+    otherBlocks[0] = block_buffer[(id.x + PADDING + 1) * CHUNK_HEIGHT + (id.y + PADDING) * CHUNK_HEIGHT + (id.z + PADDING) * CHUNK_HEIGHT * CHUNK_WIDTH];
+
+    // bottom block
+    otherBlocks[1] = block_buffer[(id.x + PADDING - 1) * CHUNK_HEIGHT + (id.y + PADDING) * CHUNK_HEIGHT + (id.z + PADDING) * CHUNK_HEIGHT * CHUNK_WIDTH];
+
+    // left block
+    otherBlocks[2] = block_buffer[(id.x + PADDING) * CHUNK_HEIGHT + (id.y + PADDING - 1) * CHUNK_HEIGHT + (id.z + PADDING) * CHUNK_HEIGHT * CHUNK_WIDTH];
+
+    // right block
+    otherBlocks[3] = block_buffer[(id.x + PADDING) * CHUNK_HEIGHT + (id.y + PADDING + 1) * CHUNK_HEIGHT + (id.z + PADDING) * CHUNK_HEIGHT * CHUNK_WIDTH];
+
+    // front block
+    otherBlocks[4] = block_buffer[(id.x + PADDING) * CHUNK_HEIGHT + (id.y + PADDING) * CHUNK_HEIGHT + (id.z + PADDING - 1) * CHUNK_HEIGHT * CHUNK_WIDTH];
+
+    // back block
+    otherBlocks[5] = block_buffer[(id.x + PADDING) * CHUNK_HEIGHT + (id.y + PADDING) * CHUNK_HEIGHT + (id.z + PADDING + 1) * CHUNK_HEIGHT * CHUNK_WIDTH];
+
+    uint topBlocksides = otherBlocks[0] << 31 & (1 << 31) 
+    
+    ourBlock &= 
+}

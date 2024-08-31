@@ -5,9 +5,10 @@ namespace Src.Backend
 {
     public class Chunk
     {
-        public const uint CHUNK_SIZE = 10;
-        public const uint MAX_HEIGHT = 256;
-        public const uint OCEAN_LEVEL = 64;
+        public const uint CHUNK_SIZE = 16;
+        public const uint MAX_HEIGHT = 61;
+        public const uint MAX_HEIGHT_SIZE = MAX_HEIGHT + 1;
+        public const uint OCEAN_LEVEL = 54;
 
         private static readonly MD5 MD5 = MD5.Create();
         
@@ -18,7 +19,7 @@ namespace Src.Backend
         {
             X = x;
             Z = z;
-            Blocks = new Block[MAX_HEIGHT * CHUNK_SIZE * CHUNK_SIZE];
+            Blocks = new Block[MAX_HEIGHT_SIZE * CHUNK_SIZE * CHUNK_SIZE];
         }
         
         public byte[] GetHash()
@@ -37,11 +38,11 @@ namespace Src.Backend
 
         public void SetAllAir()
         {
-            for (var z = 0; z < CHUNK_SIZE; z++)
+            for (uint z = 0; z < CHUNK_SIZE; z++)
             {
-                for (var x = 0; x < CHUNK_SIZE; x++)
+                for (uint x = 0; x < CHUNK_SIZE; x++)
                 {
-                    for (var y = 0; y < MAX_HEIGHT; y++)
+                    for (uint y = 0; y < MAX_HEIGHT; y++)
                     {
                         SetBlock(x, y, z, BlockType.Air);
                     }
@@ -49,22 +50,22 @@ namespace Src.Backend
             }
         }
         
-        public void SetBlock(int x, int y, int z, BlockType type)
+        public void SetBlock(uint x, uint y, uint z, BlockType type)
         {
             Blocks[GetBlockIndexInChunk(x, y, z)] = new Block(x, y, z, type);
         }
 
-        public static long GetBlockIndexInChunk(int x, int y, int z)
+        public static long GetBlockIndexInChunk(uint x, uint y, uint z)
         {
-            return y + x * MAX_HEIGHT + z * MAX_HEIGHT * CHUNK_SIZE;
+            return y + x * MAX_HEIGHT_SIZE + z * MAX_HEIGHT_SIZE * CHUNK_SIZE;
         }
         
-        public static (int x, int z) ConvertWorldToChunk(int x, int z)
+        public static (uint x, uint z) ConvertWorldToChunk(uint x, uint z)
         {
-            return (x / (int) CHUNK_SIZE, z / (int) CHUNK_SIZE);
+            return (x / CHUNK_SIZE, z / CHUNK_SIZE);
         }
         
-        public static (long x, long z) ConvertLocalToWorld(int xBlock, int zBlock, int xChunk, int zChunk)
+        public static (long x, long z) ConvertLocalToWorld(uint xBlock, uint zBlock, uint xChunk, uint zChunk)
         {
             return (xBlock + xChunk * CHUNK_SIZE, zBlock + zChunk * CHUNK_SIZE);
         }
@@ -90,9 +91,9 @@ namespace Src.Backend
             
             for (var i = 0; i < data.Length; i += 16)
             {
-                var x = BitConverter.ToInt32(data, i);
-                var y = BitConverter.ToInt32(data, i + 4);
-                var z = BitConverter.ToInt32(data, i + 8);
+                var x = BitConverter.ToUInt32(data, i);
+                var y = BitConverter.ToUInt32(data, i + 4);
+                var z = BitConverter.ToUInt32(data, i + 8);
                 var type = (BlockType) BitConverter.ToInt32(data, i + 12);
                 chunk.Blocks[i] = new Block(x, y, z, type);
             }

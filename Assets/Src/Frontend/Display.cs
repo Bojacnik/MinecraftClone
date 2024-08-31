@@ -1,67 +1,53 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 using Src.Backend;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.PostProcessing;
 
 namespace Src.Frontend
 {
-    public class Display
+    public static class Display
     {
-        private static Chunk FindMostLeft(List<Chunk> chunks)
+        public static void DisplayMesh(List<Chunk> chunks)
         {
-            var mostLeft = chunks[0];
-            foreach (var chunk in chunks)
+            var mesh = CreateMesh(chunks);
+            var objekt = new GameObject
             {
-                if (chunk.X < mostLeft.X)
-                {
-                    mostLeft = chunk;
-                }
-            }
-            return mostLeft;
-        }
-        
-        private static Chunk FindMostBottom(List<Chunk> chunks)
-        {
-            var mostBottom = chunks[0];
-            foreach (var chunk in chunks)
-            {
-                if (chunk.Z < mostBottom.Z)
-                {
-                    mostBottom = chunk;
-                }
-            }
-            return mostBottom;
-        }
-        
-        private static Vector3 FindMostLeftBottomChunk(List<Chunk> chunks)
-        {
-            var mostLeft = FindMostLeft(chunks);
-            var mostBottom = FindMostBottom(chunks);
+                name = "Chunk"
+            };
             
-            if (mostLeft == mostBottom)
-            {
-                return new Vector3(mostLeft.X * Chunk.CHUNK_SIZE, 0, mostBottom.Z * Chunk.CHUNK_SIZE);
-            }
-            return new Vector3(mostLeft.X * Chunk.CHUNK_SIZE, 0, mostBottom.Z - 1 * Chunk.CHUNK_SIZE);
+            var meshFilter = objekt.AddComponent<MeshFilter>();
+            var meshRenderer = objekt.AddComponent<MeshRenderer>();
+            //var meshCollider = objekt.AddComponent<MeshCollider>();
+            meshFilter.mesh = mesh.Item1;
+            objekt.transform.position = Vector3.zero;
+            meshRenderer.material = FindMaterial("Stone");
+            //meshCollider.sharedMesh = mesh.Item1;
         }
         
         // Mask for the sides of a block
+        [Flags]
         private enum Side
         {
             None = 0,
             Left = 1,
             Right = 2,
-            Front = 4, 
+            Front = 4,
             Back = 8,
             Top = 16,
-            Bottom = 32
+            Bottom = 32,
+            All = 63
         }
         
-        private static bool IsBlockVisible(Block block, Side mask, Chunk currChunk, List<Chunk> chunks)
+        private static Side GetVisibleFaces(Block block, Side mask, Chunk currChunk, List<Chunk> chunks)
         {
+            var result = Side.None;
             if (block.Type == BlockType.Air)
             {
-                return false;
+                return result;
             }
             
             var x = block.X;
@@ -70,6 +56,7 @@ namespace Src.Frontend
 
             var chunkX = currChunk.X;
             var chunkZ = currChunk.Z;
+
             
             if (mask.HasFlag(Side.Left))
             {
@@ -82,16 +69,21 @@ namespace Src.Frontend
                     
                     if (leftChunk == null)
                     {
-                        return true;
+                        result |= Side.Left;
                     }
-                    // find the block to the left of the current block
-                    var leftBlock = leftChunk.Blocks[Chunk.GetBlockIndexInChunk((int)Chunk.CHUNK_SIZE - 1, y, z)];
-                    // if there is no block to the left, the block is visible
-                    return leftBlock == null || leftBlock.Type == BlockType.Air;
+                    else {
+                        // find the block to the left of the current block
+                        var leftBlock = leftChunk?.Blocks[Chunk.GetBlockIndexInChunk((int)Chunk.CHUNK_SIZE - 1, y, z)];
+                        // if there is no block to the left, the block is visible
+                        if (leftBlock == null || leftBlock.Type == BlockType.Air)
+                            result |= Side.Left;
+                    }
                 }
-
-                var leftblock = currChunk.Blocks[Chunk.GetBlockIndexInChunk(x - 1, y, z)];
-                return leftblock == null || leftblock.Type == BlockType.Air;
+                else {
+                    var leftblock = currChunk.Blocks[Chunk.GetBlockIndexInChunk(x - 1, y, z)];
+                    if (leftblock == null || leftblock.Type == BlockType.Air)
+                        result |= Side.Left;
+                }
             }
             if (mask.HasFlag(Side.Right))
             {
@@ -100,318 +92,299 @@ namespace Src.Frontend
                     var rightChunk = chunks.Find(chunk => chunk.X == chunkX + 1 && chunk.Z == chunkZ);
                     if (rightChunk == null)
                     {
-                        return true;
+                        result |= Side.Right;
                     }
-                    var rightBlock = rightChunk.Blocks[Chunk.GetBlockIndexInChunk(0, y, z)];
-                    return rightBlock == null || rightBlock.Type == BlockType.Air;
+                    var rightBlock = rightChunk?.Blocks[Chunk.GetBlockIndexInChunk(0, y, z)];
+                    if (rightBlock == null || rightBlock.Type == BlockType.Air)
+                        result |= Side.Right;
                 }
-                var rightblock = currChunk.Blocks[Chunk.GetBlockIndexInChunk(x + 1, y, z)];
-                return rightblock == null || rightblock.Type == BlockType.Air;
+                else {
+                    var rightblock = currChunk.Blocks[Chunk.GetBlockIndexInChunk(x + 1, y, z)];
+                    if (rightblock == null || rightblock.Type == BlockType.Air)
+                        result |= Side.Right;
+                }
             }
             if (mask.HasFlag(Side.Front))
             {
-                if (z == Chunk.CHUNK_SIZE - 1)
-                {
-                    var frontChunk = chunks.Find(chunk => chunk.X == chunkX && chunk.Z == chunkZ + 1);
+                if (z == 0) {
+                    var frontChunk = chunks.Find(chunk => chunk.X == chunkX && chunk.Z == chunkZ - 1);
                     if (frontChunk == null)
                     {
-                        return true;
+                        result |= Side.Front;
+                    } else {
+                        var frontBlock = frontChunk?.Blocks[Chunk.GetBlockIndexInChunk(x, y, (int)Chunk.CHUNK_SIZE - 1)];
+                        if (frontBlock == null || frontBlock.Type == BlockType.Air)
+                            result |= Side.Front;
                     }
-                    var frontBlock = frontChunk.Blocks[Chunk.GetBlockIndexInChunk(x, y, 0)];
-                    return frontBlock == null || frontBlock.Type == BlockType.Air;
+                } else {
+                    var frontBlock = currChunk.Blocks[Chunk.GetBlockIndexInChunk(x, y, z - 1)];
+                    if (frontBlock == null || frontBlock.Type == BlockType.Air)
+                        result |= Side.Front;
                 }
-                var frontblock = currChunk.Blocks[Chunk.GetBlockIndexInChunk(x, y, z + 1)];
-                return frontblock == null || frontblock.Type == BlockType.Air;
             }
             if (mask.HasFlag(Side.Back))
             {
-                if (z == 0) {
-                    var backChunk = chunks.Find(chunk => chunk.X == chunkX && chunk.Z == chunkZ - 1);
+                if (z == Chunk.CHUNK_SIZE - 1)
+                {
+                    var backChunk = chunks.Find(chunk => chunk.X == chunkX && chunk.Z == chunkZ + 1);
                     if (backChunk == null)
                     {
-                        return true;
+                        result |= Side.Back;
                     }
-                    var backBlock = backChunk.Blocks[Chunk.GetBlockIndexInChunk(x, y, (int)Chunk.CHUNK_SIZE - 1)];
-                    return backBlock == null || backBlock.Type == BlockType.Air;
+                    else {
+                        var backBlock = backChunk?.Blocks[Chunk.GetBlockIndexInChunk(x, y, 0)];
+                        if (backBlock == null || backBlock.Type == BlockType.Air)
+                            result |= Side.Back;
+                    }
+                } else {
+                    var backBlock = currChunk.Blocks[Chunk.GetBlockIndexInChunk(x, y, z + 1)];
+                    if (backBlock == null || backBlock.Type == BlockType.Air)
+                        result |= Side.Back;
                 }
-                var backblock = currChunk.Blocks[Chunk.GetBlockIndexInChunk(x, y, z - 1)];
-                return backblock == null || backblock.Type == BlockType.Air;
             }
-
             if (mask.HasFlag(Side.Top))
             {
                 if (y == Chunk.MAX_HEIGHT - 1)
                 {
-                    return true;
+                    result |= Side.Top;
+                } else {
+                    var topBlock = currChunk.Blocks[Chunk.GetBlockIndexInChunk(x, y + 1, z)];
+                    if (topBlock == null || topBlock.Type == BlockType.Air)
+                        result |= Side.Top;
                 }
-                var topBlock = currChunk.Blocks[Chunk.GetBlockIndexInChunk(x, y + 1, z)];
-                return topBlock == null || topBlock.Type == BlockType.Air;
             }
-            
             if (mask.HasFlag(Side.Bottom))
             {
                 if (y == 0)
                 {
-                    return false;
+                    result |= Side.Bottom;
+                } else { 
+                    var bottomBlock = currChunk.Blocks[Chunk.GetBlockIndexInChunk(x, y - 1, z)];
+                    if (bottomBlock == null || bottomBlock.Type == BlockType.Air)
+                        result |= Side.Bottom;
                 }
-                var bottomBlock = currChunk.Blocks[Chunk.GetBlockIndexInChunk(x, y - 1, z)];
-                return bottomBlock == null || bottomBlock.Type == BlockType.Air;
             }
-
-            return false;
+            return result;
         }
 
-        private static Mesh CreateMesh(List<Chunk> chunks)
+        private static (Mesh, Material[]) CreateMesh(List<Chunk> chunks)
         {
-            var mesh = new Mesh();
-            
-            var meshVertices = new List<Vector3>();
-            var meshTriangles = new List<int>();
-            //var meshUVs = new Vector2[mesh.vertices.Length];
-
-            
-            var verticesIndex = 0;
-            for (var chunkIndex = 0; chunkIndex < chunks.Count; chunkIndex++)
+            var chunksAsArray = chunks.ToArray();
+            foreach (var chunk in chunks)
             {
-                var chunk = chunks[chunkIndex];
-                var blockVertices = new Vector3[8];
-                var blockTriangles = new int[6 * 2 * 3];
-                //var blockUVs = new Vector2[8];
-                
-                for (var blockIndex = 0; blockIndex < chunk.Blocks.Length; blockIndex++)
+                var result = BinaryCulledMesher.CreateChunkMesh(chunk, chunksAsArray);
+                foreach (var point in result.Item1.vertices)
                 {
-                    var block = chunk.Blocks[blockIndex];
-                    if (block.Type == BlockType.Air)
-                    {
-                        continue;
-                    }
-
-                    var x = block.X + chunk.X * Chunk.CHUNK_SIZE;
-                    var y = block.Y;
-                    var z = block.Z + chunk.Z * Chunk.CHUNK_SIZE;
-                    
-                    blockVertices[0] = new Vector3(x, y, z);
-                    blockVertices[1] = new Vector3(x, y, z + 1);
-                    blockVertices[2] = new Vector3(x, y + 1, z);
-                    blockVertices[3] = new Vector3(x, y + 1, z + 1);
-                    blockVertices[4] = new Vector3(x + 1, y, z);
-                    blockVertices[5] = new Vector3(x + 1, y, z + 1);
-                    blockVertices[6] = new Vector3(x + 1, y + 1, z);
-                    blockVertices[7] = new Vector3(x + 1, y + 1, z + 1);
-                    
-
-                    verticesIndex += 8;
-                    
-                    // Left face
-                    if (IsBlockVisible(block, Side.Left, chunk, chunks)) {
-                        blockTriangles[0] = 0 + verticesIndex - 8; 
-                        blockTriangles[1] = 1 + verticesIndex - 8;
-                        blockTriangles[2] = 2 + verticesIndex - 8;
-                    
-                        blockTriangles[3] = 2 + verticesIndex - 8;
-                        blockTriangles[4] = 1 + verticesIndex - 8;
-                        blockTriangles[5] = 3 + verticesIndex - 8;
-                    }
-
-                    
-                    // Right face
-                    if (IsBlockVisible(block, Side.Right, chunk, chunks))
-                    {
-                        blockTriangles[6] = 4 + verticesIndex - 8;
-                        blockTriangles[7] = 6 + verticesIndex - 8;
-                        blockTriangles[8] = 5 + verticesIndex - 8;
-                    
-                        blockTriangles[9] = 6 + verticesIndex - 8;
-                        blockTriangles[10] = 7 + verticesIndex - 8;
-                        blockTriangles[11] = 5 + verticesIndex - 8;
-                    }
-                    
-                    // Bottom face
-                    if (IsBlockVisible(block, Side.Bottom, chunk, chunks))
-                    {
-                        blockTriangles[12] = 0 + verticesIndex - 8;
-                        blockTriangles[13] = 4 + verticesIndex - 8;
-                        blockTriangles[14] = 1 + verticesIndex - 8;
-                    
-                        blockTriangles[15] = 4 + verticesIndex - 8;
-                        blockTriangles[16] = 5 + verticesIndex - 8;
-                        blockTriangles[17] = 1 + verticesIndex - 8;
-                    }
-
-                    // Top face
-                    if (IsBlockVisible(block, Side.Top, chunk, chunks))
-                    {
-                        blockTriangles[18] = 2 + verticesIndex - 8;
-                        blockTriangles[19] = 3 + verticesIndex - 8;
-                        blockTriangles[20] = 6 + verticesIndex - 8;
-                    
-                        blockTriangles[21] = 3 + verticesIndex - 8;
-                        blockTriangles[22] = 7 + verticesIndex - 8;
-                        blockTriangles[23] = 6 + verticesIndex - 8;
-                    }
-                    
-                    // Back face
-                    if (IsBlockVisible(block, Side.Back, chunk, chunks))
-                    {
-                        blockTriangles[24] = 0 + verticesIndex - 8;
-                        blockTriangles[25] = 2 + verticesIndex - 8;
-                        blockTriangles[26] = 4 + verticesIndex - 8;
-                    
-                        blockTriangles[27] = 2 + verticesIndex - 8;
-                        blockTriangles[28] = 6 + verticesIndex - 8;
-                        blockTriangles[29] = 4 + verticesIndex - 8;
-                    }
-                    
-                    // Front face
-                    if (IsBlockVisible(block, Side.Front, chunk, chunks))
-                    {
-                        blockTriangles[30] = 1 + verticesIndex - 8;
-                        blockTriangles[31] = 5 + verticesIndex - 8;
-                        blockTriangles[32] = 3 + verticesIndex - 8;
-                    
-                        blockTriangles[33] = 5 + verticesIndex - 8;
-                        blockTriangles[34] = 7 + verticesIndex - 8;
-                        blockTriangles[35] = 3 + verticesIndex - 8;
-                    }
-                    
-                    meshVertices.AddRange(blockVertices);
-                    meshTriangles.AddRange(blockTriangles);
-                    //meshUVs = new Vector2[meshVertices.Count];
+                    DrawSphere(new Vector4(point.x, point.y, point.z, 1), 0.5f, Color.red);
                 }
+                return (result.Item1, null);
             }
-            
-            mesh.vertices = meshVertices.ToArray();
-            mesh.triangles = meshTriangles.ToArray();
-            
 
-            mesh.Optimize();
-            mesh.RecalculateNormals();
-            mesh.RecalculateBounds();
-            
-            return mesh;
+            return (null, null);
         }
         
-        public static void DisplayMesh(List<Chunk> chunks)
+        [Obsolete]
+        public static void DrawSphere(Vector4 pos, float radius, Color color)
         {
-            var mesh = CreateMesh(chunks);
-            var objekt = new GameObject();
-            
-            var meshFilter = objekt.AddComponent<MeshFilter>();
-            var meshRenderer = objekt.AddComponent<MeshRenderer>();
-            var meshCollider = objekt.AddComponent<MeshCollider>();
-            meshFilter.mesh = mesh;
-            objekt.transform.position = Vector3.zero;
-            meshRenderer.material = FindMaterial("Stone");
-            meshCollider.sharedMesh = mesh;
-        }
-
-        public static void DisplayChunk(Chunk chunk)
-        {
-            foreach (var block in chunk.Blocks)
+            Vector4[] v = MakeUnitSphere(16);
+            int len = MakeUnitSphere(16).Length / 3;
+            for (int i = 0; i < len; i++)
             {
-                DisplayBlock(block.X, block.Y, block.Z, block.Type, chunk.X, chunk.Z);
+                var sX = pos + radius * v[0 * len + i];
+                var eX = pos + radius * v[0 * len + (i + 1) % len];
+                var sY = pos + radius * v[1 * len + i];
+                var eY = pos + radius * v[1 * len + (i + 1) % len];
+                var sZ = pos + radius * v[2 * len + i];
+                var eZ = pos + radius * v[2 * len + (i + 1) % len];
+                Debug.DrawLine(sX, eX, color);
+                Debug.DrawLine(sY, eY, color);
+                Debug.DrawLine(sZ, eZ, color);
             }
         }
         
-        public static void DisplayBlock(long x, long y, long z, BlockType type, int chunkx, int chunkz)
+        [Obsolete]
+        private static Vector4[] MakeUnitSphere(int len)
         {
-            if (type == BlockType.Air)
+            Debug.Assert(len > 2);
+            var v = new Vector4[len * 3];
+            for (int i = 0; i < len; i++)
             {
-                return;
+                var f = i / (float)len;
+                float c = Mathf.Cos(f * (float)(Math.PI * 2.0));
+                float s = Mathf.Sin(f * (float)(Math.PI * 2.0));
+                v[0 * len + i] = new Vector4(c, s, 0, 1);
+                v[1 * len + i] = new Vector4(0, c, s, 1);
+                v[2 * len + i] = new Vector4(s, 0, c, 1);
             }
-            
-            var objekt = new GameObject();
-            var meshFilter = objekt.AddComponent<MeshFilter>();
-            var meshRenderer = objekt.AddComponent<MeshRenderer>();
-            var meshCollider = objekt.AddComponent<MeshCollider>();
-            //objekt.AddComponent<Shader>();
-
-            var mesh = new Mesh();
-            meshFilter.mesh = mesh;
-        
-            objekt.transform.position = new Vector3(x + chunkx * Chunk.CHUNK_SIZE, y, z + chunkz * Chunk.CHUNK_SIZE);
-
-            // Define the vertices. A square has 4 vertices.
-            var vertices = new Vector3[8];
-            vertices[0] = new Vector3(0, 0, 0);
-            vertices[1] = new Vector3(0, 0, 1);
-            vertices[2] = new Vector3(0, 1, 0);
-            vertices[3] = new Vector3(0, 1, 1);
-            vertices[4] = new Vector3(1, 0, 0);
-            vertices[5] = new Vector3(1, 0, 1);
-            vertices[6] = new Vector3(1, 1, 0);
-            vertices[7] = new Vector3(1, 1, 1);
-        
-            // Define the triangles. A square has 2 triangles.
-            var triangles = new int[6*2*3];
-            triangles[0] = 0;
-            triangles[1] = 1;
-            triangles[2] = 2;
-
-            triangles[3] = 2;
-            triangles[4] = 1;
-            triangles[5] = 3;
-
-            triangles[6] = 4;
-            triangles[7] = 6;
-            triangles[8] = 5;
-
-            triangles[9] = 6;
-            triangles[10] = 7;
-            triangles[11] = 5;
-
-            triangles[12] = 0;
-            triangles[13] = 4;
-            triangles[14] = 1;
-
-            triangles[15] = 4;
-            triangles[16] = 5;
-            triangles[17] = 1;
-
-            triangles[18] = 2;
-            triangles[19] = 3;
-            triangles[20] = 6;
-
-            triangles[21] = 3;
-            triangles[22] = 7;
-            triangles[23] = 6;
-
-            triangles[24] = 0;
-            triangles[25] = 2;
-            triangles[26] = 4;
-
-            triangles[27] = 2;
-            triangles[28] = 6;
-            triangles[29] = 4;
-
-            triangles[30] = 1;
-            triangles[31] = 5;
-            triangles[32] = 3;
-
-            triangles[33] = 5;
-            triangles[34] = 7;
-            triangles[35] = 3;
-        
-            // Assign the vertices and triangles to the mesh
-            mesh.vertices = vertices;
-            mesh.triangles = triangles;
-
-            var material = type switch
-            {
-                BlockType.Stone => FindMaterialOrNone("Stone"),
-                BlockType.Grass => FindMaterialOrNone("Grass"),
-                BlockType.Dirt => FindMaterialOrNone("Dirt"),
-                BlockType.Bedrock => FindMaterialOrNone("Bedrock"),
-                _ => FindMaterial("None")
-            };
-            meshRenderer.material = material;
-        
-            meshCollider.sharedMesh = mesh;
-
-            // Recalculate the normals (this is important for lighting)
-            mesh.RecalculateNormals();
-            mesh.RecalculateBounds();
+            return v;
         }
+
+        private static int addTriangles(Side visibleFaces, List<int> triangles, int index, int triangleCount)
+        {
+            // front face
+            if (visibleFaces.HasFlag(Side.Front))
+            {
+                triangles.Add(index + 0);
+                triangles.Add(index + 2);
+                triangles.Add(index + 1);
+                                
+                triangles.Add(index + 2);
+                triangles.Add(index + 3);
+                triangles.Add(index + 1);
+                                
+                triangleCount += 2;
+            }
+                            
+            // back face
+            if (visibleFaces.HasFlag(Side.Back))
+            {
+                triangles.Add(index + 5);
+                triangles.Add(index + 6);
+                triangles.Add(index + 4);
+
+                triangles.Add(index + 5);
+                triangles.Add(index + 7);
+                triangles.Add(index + 6);
+                                
+                triangleCount += 2;
+            }
+                            
+            // left face
+            if (visibleFaces.HasFlag(Side.Left))
+            {
+                triangles.Add(index + 8);
+                triangles.Add(index + 9);
+                triangles.Add(index + 10);
+
+                triangles.Add(index + 10);
+                triangles.Add(index + 9);
+                triangles.Add(index + 11);
+                                
+                triangleCount += 2;
+            }
+
+            // right face
+            if (visibleFaces.HasFlag(Side.Right))
+            {
+                triangles.Add(index + 12);
+                triangles.Add(index + 14);
+                triangles.Add(index + 13);
+
+                triangles.Add(index + 14);
+                triangles.Add(index + 15);
+                triangles.Add(index + 13);
+                                
+                triangleCount += 2;
+            }
+
+            // top face
+            if (visibleFaces.HasFlag(Side.Top))
+            {
+                triangles.Add(index + 16);
+                triangles.Add(index + 18);
+                triangles.Add(index + 17);
+
+                triangles.Add(index + 18);
+                triangles.Add(index + 19);
+                triangles.Add(index + 17);
+                                
+                triangleCount += 2;
+            }
+
+            // bottom face
+            if (visibleFaces.HasFlag(Side.Bottom))
+            {
+                triangles.Add(index + 20);
+                triangles.Add(index + 21);
+                triangles.Add(index + 22);
+
+                triangles.Add(index + 22);
+                triangles.Add(index + 21);
+                triangles.Add(index + 23);
+                                
+                triangleCount += 2;
+            }
+
+            return triangleCount;
+        }
+        private static void addVertices(List<Vector3> vertices, Vector3 globalPosition)
+        {
+            // front face
+            vertices.Add(globalPosition);
+            vertices.Add(globalPosition + new Vector3(1, 0, 0));
+            vertices.Add(globalPosition + new Vector3(0, 1, 0));
+            vertices.Add(globalPosition + new Vector3(1, 1, 0));
+                            
+            // back face
+            vertices.Add(globalPosition + new Vector3(0, 0, 1));
+            vertices.Add(globalPosition + new Vector3(1, 0, 1));
+            vertices.Add(globalPosition + new Vector3(0, 1, 1));
+            vertices.Add(globalPosition + new Vector3(1, 1, 1));
+                            
+            // left face
+            vertices.Add(globalPosition);
+            vertices.Add(globalPosition + new Vector3(0, 0, 1));
+            vertices.Add(globalPosition + new Vector3(0, 1, 0));
+            vertices.Add(globalPosition + new Vector3(0, 1, 1));
+                            
+            // right face
+            vertices.Add(globalPosition + new Vector3(1, 0, 0));
+            vertices.Add(globalPosition + new Vector3(1, 0, 1));
+            vertices.Add(globalPosition + new Vector3(1, 1, 0));
+            vertices.Add(globalPosition + new Vector3(1, 1, 1));
+                            
+            // top face
+            vertices.Add(globalPosition + new Vector3(0, 1, 0));
+            vertices.Add(globalPosition + new Vector3(1, 1, 0));
+            vertices.Add(globalPosition + new Vector3(0, 1, 1));
+            vertices.Add(globalPosition + new Vector3(1, 1, 1));
+                            
+            // bottom face
+            vertices.Add(globalPosition);
+            vertices.Add(globalPosition + new Vector3(1, 0, 0));
+            vertices.Add(globalPosition + new Vector3(0, 0, 1));
+            vertices.Add(globalPosition + new Vector3(1, 0, 1));
+        }
+
+        private static void addUVs(List<Vector2> uv)
+        {
+            // front uv
+            uv.Add(new Vector2(0, 0));
+            uv.Add(new Vector2(1, 0));
+            uv.Add(new Vector2(0, 1));
+            uv.Add(new Vector2(1, 1));
+                            
+            // back uv
+            uv.Add(new Vector2(1, 0));
+            uv.Add(new Vector2(0, 0));
+            uv.Add(new Vector2(1, 1));
+            uv.Add(new Vector2(0, 1));
+                            
+            // left uv
+            uv.Add(new Vector2(1, 0));
+            uv.Add(new Vector2(0, 0));
+            uv.Add(new Vector2(1, 1));
+            uv.Add(new Vector2(0, 1));
+                            
+            // right uv
+            uv.Add(new Vector2(0, 0));
+            uv.Add(new Vector2(1, 0));
+            uv.Add(new Vector2(0, 1));
+            uv.Add(new Vector2(1, 1));
+                            
+            // top uv
+            uv.Add(new Vector2(0, 0));
+            uv.Add(new Vector2(1, 0));
+            uv.Add(new Vector2(0, 1));
+            uv.Add(new Vector2(1, 1));
+                            
+            // bottom uv
+            uv.Add(new Vector2(1, 0));
+            uv.Add(new Vector2(0, 0));
+            uv.Add(new Vector2(1, 1));
+            uv.Add(new Vector2(0, 1));
+        }
+
 
         private static Material FindMaterial(string name)
         {
